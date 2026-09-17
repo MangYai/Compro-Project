@@ -1,0 +1,72 @@
+M&N Rental Shop
+ชื่อฟังก์ชัน + พารามิเตอร์ที่ทุกคนต้องเขียนตามนี้เป๊ะ ๆ เพื่อให้เวลารวมไฟล์ (merge) ทุกคนเรียกใช้ฟังก์ชันของกันและกันได้โดยไม่ error
+
+** ห้ามเปลี่ยนชื่อฟังก์ชัน/ชื่อพารามิเตอร์เองโดยไม่แจ้งก่อน ถ้าจำเป็นต้องเปลี่ยน ให้แจ้งในกลุ่มแชทก่อนแก้ทุกครั้ง
+
+การแบ่งงาน
+ไฟล์			ผู้รับผิดชอบ
+config.py		คนที่1			ล็อกแล้ว (ใช้ค่าตามที่อาจารย์อนุมัติ)
+storage.py	    คนที่1			
+books.py		คนที่ 2	
+members.py	    คนที่ 3	
+rentals.py		คนที่ 4  (ต้องรอ books.py, members.py เขียนฟังก์ชันตามชื่อนี้ก่อนถึงจะทดสอบได้จริง แต่เขียนโครง logic คู่ขนานไปได้เลย)
+report.py	ทำร่วมกันตอน integration	
+menu.py	    ทำร่วมกันตอน integration	
+main.py	    ทำร่วมกันตอน integration	
+
+storage.py (ฟังก์ชันกลางที่ทุกไฟล์เรียกใช้)
+encode_str(value, size) -> bytes
+decode_str(raw_bytes) -> str
+now_ts() -> int
+ts_to_str(ts) -> str
+ensure_file(path) -> None
+count_records(path, record_size) -> int
+read_all(path, record_size, unpack_fn) -> list[dict]
+append_record(path, raw_bytes) -> None
+overwrite_record_at_index(path, record_size, index, raw_bytes) -> None
+find_index_by_id(path, record_size, unpack_fn, id_field, target_id) -> (int, dict|None)
+next_id(path, record_size, unpack_fn, id_field) -> int
+
+books.py
+pack_book(book_id, title, author, genre, price, stock_total, stock_available, status) -> bytes
+unpack_book(raw) -> dict
+add(title, author, genre, stock_total) -> int          # คืน book_id ใหม่
+get(book_id) -> dict | None
+update(book_id, title=None, author=None, genre=None, stock_total=None) -> bool
+delete(book_id) -> bool
+decrement_stock(book_id) -> bool     # เรียกจาก rentals.py
+increment_stock(book_id) -> bool     # เรียกจาก rentals.py
+list_all(active_only=True) -> list[dict]
+filter_books(genre=None, available_only=False) -> list[dict]
+stats() -> dict
+
+members.py
+pack_member(member_id, name, phone, join_date, status) -> bytes
+unpack_member(raw) -> dict
+add(name, phone) -> int              # คืน member_id ใหม่
+get(member_id) -> dict | None
+update(member_id, name=None, phone=None) -> bool
+delete(member_id) -> bool
+list_all(active_only=True) -> list[dict]
+
+rentals.py
+pack_rental(rent_id, book_id, member_id, rent_date, due_date, return_date, fine_amount, status) -> bytes
+unpack_rental(raw) -> dict
+add(book_id, member_id, rent_days=7) -> int      # คืน rent_id ใหม่, raise ValueError ถ้าเงื่อนไขไม่ผ่าน
+return_book(rent_id) -> float                    # คืนค่าปรับ, raise ValueError ถ้าไม่พบ/คืนซ้ำ
+delete(rent_id) -> bool
+list_all(status=None) -> list[dict]
+stats() -> dict
+
+report.py
+generate() -> str    # คืน path ของ report.txt ที่สร้าง
+
+menu.py
+main_menu() -> None   # ลูปหลักของโปรแกรม
+
+จุดที่ต้องตกลงร่วมกันก่อนเริ่มเขียน (ห้ามลืม)
+1. 	encode_str ต้อง encode เป็น utf-8 ก่อน pad เสมอ — ถ้า pad ตอนยังเป็น str เฉย ๆ ภาษาไทยจะพังเพราะ 1 ตัวอักษรไทย = 3 ไบต์ ไม่ใช่ 1 ไบต์
+2. 	Deleted ต้องไม่ถูกนับในสถิติ/รายงาน — ทุกฟังก์ชัน stats()/list_all(active_only=True) ต้องกรอง status ออกให้ถูกต้อง
+3.	Soft-delete เท่านั้น — ห้ามลบ record ออกจากไฟล์จริง (เปลี่ยน status เป็น 0 เท่านั้น) เพราะไฟล์เป็น fixed-length ต้องรักษาตำแหน่ง record เดิมไว้
+4.	rentals.add() ต้องเรียก books.decrement_stock() และ rentals.return_book() ต้องเรียก books.increment_stock() ห้ามไปเขียนแก้ไฟล์ books.dat ตรง ๆ ในไฟล์ rentals.py เอง
+5.	วันที่ทุกฟิลด์เก็บเป็น epoch timestamp (int) ไม่ใช่ string วันที่
