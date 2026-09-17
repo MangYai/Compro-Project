@@ -33,7 +33,7 @@ GENRE_PRICE = {
     "Manga": 5.0,
     "Novel": 15.0,
 }
- 
+
 APP_VERSION = "1.0"
 APP_NAME = "M&N Rental Shop"
  
