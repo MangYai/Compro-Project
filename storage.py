@@ -9,13 +9,11 @@ from datetime import datetime
  
  
 def encode_str(value, size):
-    """แปลง string เป็น bytes ความยาวคงที่ (pad/truncate นับเป็นไบต์ ไม่ใช่ตัวอักษร)"""
     raw = value.encode("utf-8")[:size]
     return raw.ljust(size, b"\x00")
  
  
 def decode_str(raw_bytes):
-    """แปลง bytes กลับเป็น string ตัดค่า null-byte ท้ายออก"""
     return raw_bytes.split(b"\x00", 1)[0].decode("utf-8", errors="ignore")
  
  
