@@ -10,7 +10,7 @@ from config import (
     STATUS_DELETED,
     GENRE_PRICE,
 )
- 
+
 import struct
  
  

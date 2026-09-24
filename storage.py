@@ -22,7 +22,7 @@ def decode_str(raw_bytes):
 def now_ts():
     return int(time.time())
  
- 
+
 def ts_to_str(ts):
     if ts == 0:
         return "-"
