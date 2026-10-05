@@ -332,7 +332,7 @@ def _rentals_menu():
 def _report():
     _print_header("สร้างรายงาน")
     paths = report.generate()
-    print("  ✓ สร้างรายงานสำเร็จ 3 ไฟล์:")
+    print("  ✓ สร้างรายงานสำเร็จ :")
     for p in paths:
         print(f"    - {p}")
 
@@ -353,7 +353,7 @@ def _run_submenu(title, option_lines, actions):
             continue
         try:
             action()
-        except Exception as e:  # กันโปรแกรมล่มจากบั๊กในโมดูลอื่น
+        except Exception as e:  
             print(f"\n  ! เกิดข้อผิดพลาด: {e}")
         _pause()
 
@@ -372,7 +372,7 @@ def main_menu():
         print("  1. จัดการหนังสือ")
         print("  2. จัดการสมาชิก")
         print("  3. เช่า/คืนหนังสือ")
-        print("  4. สร้างรายงาน (3 ไฟล์: report_books / report_members / report_rentals)")
+        print("  4. สร้างรายงาน ")
         print("  0. ออกจากโปรแกรม")
         choice = input("\nเลือกเมนู: ").strip()
 
