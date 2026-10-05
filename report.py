@@ -1,6 +1,3 @@
-"""
-สร้างไฟล์รายงานสรุป report.txt
-"""
 import books
 import members
 import rentals
@@ -8,7 +5,9 @@ import storage
 from config import (
     APP_NAME,
     APP_VERSION,
-    REPORT_FILE,
+    REPORT_BOOKS_FILE,
+    REPORT_MEMBERS_FILE,
+    REPORT_RENTALS_FILE,
     STATUS_DELETED,
     STATUS_BORROWING,
     STATUS_RETURNED,
@@ -18,64 +17,142 @@ LINE = "=" * 60
 SUB = "-" * 60
 
 
-def _books_section():
-    s = books.stats()
-    lines = [
-        "[1] สรุปหนังสือ",
-        SUB,
-        f"จำนวนชื่อเรื่อง (ใช้งาน)  : {s['active_titles']}",
-        f"จำนวนชื่อเรื่อง (ถูกลบ)   : {s['deleted_titles']}",
-        f"จำนวนเล่มทั้งหมด          : {s['total_copies']}",
-        f"ถูกยืมอยู่                : {s['currently_borrowed']}",
-        f"พร้อมให้ยืม               : {s['available_now']}",
-        f"ราคาเช่า/วัน ต่ำสุด       : {s['price_min']:.2f} บาท",
-        f"ราคาเช่า/วัน สูงสุด       : {s['price_max']:.2f} บาท",
-        f"ราคาเช่า/วัน เฉลี่ย       : {s['price_avg']:.2f} บาท",
+def _header(title):
+    return [
+        LINE,
+        f"{APP_NAME} v{APP_VERSION}",
+        title,
+        f"สร้างเมื่อ: {storage.ts_to_str(storage.now_ts())}",
+        LINE,
         "",
-        "จำนวนเรื่องแยกตามประเภท:",
     ]
-    if s["genre_count"]:
-        for genre, n in sorted(s["genre_count"].items()):
-            lines.append(f"  - {genre}: {n}")
-    else:
-        lines.append("  (ไม่มีข้อมูล)")
 
-    lines += ["", "รายการหนังสือ (ID | ชื่อ | ผู้แต่ง | ประเภท | ราคา/วัน | ว่าง/ทั้งหมด):"]
-    items = books.list_all(active_only=True)
-    if items:
-        for b in items:
+
+def _footer():
+    return [LINE, "จบรายงาน", LINE]
+
+
+
+# รายงาน 1: หนังสือ (books.dat + rentals.dat)
+
+def generate_books_report():
+    book_rows = books.list_all(active_only=True)
+    all_rentals = [r for r in rentals.list_all() if r["status"] != STATUS_DELETED]
+
+    rent_count = {}
+    for r in all_rentals:
+        rent_count[r["book_id"]] = rent_count.get(r["book_id"], 0) + 1
+
+    lines = _header("รายงานหนังสือและสถิติการเช่า")
+    lines += [
+        "รายละเอียด: ตารางด้านล่างแสดงหนังสือที่ยังใช้งานทุกเล่ม (จาก books.dat)",
+        "ผนวกจำนวนครั้งที่เคยถูกเช่าของแต่ละเล่ม (นับจาก rentals.dat)",
+        "คอลัมน์: ID | ชื่อเรื่อง | ผู้แต่ง | ประเภท | ราคา/วัน | ว่าง/ทั้งหมด | จำนวนครั้งที่ถูกเช่า",
+        SUB,
+    ]
+
+    if book_rows:
+        for b in book_rows:
+            times = rent_count.get(b["book_id"], 0)
             lines.append(
                 f"  {b['book_id']} | {b['title']} | {b['author']} | {b['genre']} | "
-                f"{b['price_per_day']:.2f} | {b['stock_available']}/{b['stock_total']}"
+                f"{b['price_per_day']:.2f} | {b['stock_available']}/{b['stock_total']} | {times}"
             )
     else:
         lines.append("  (ไม่มีข้อมูล)")
-    return lines
+
+    lines.append("")
+    lines.append("สรุปท้ายรายงาน")
+    lines.append(SUB)
+    if book_rows:
+        most_id, most_n = max(rent_count.items(), key=lambda kv: kv[1]) if rent_count else (None, 0)
+        title_of = {b["book_id"]: b["title"] for b in book_rows}
+        genre_total = {}
+        for b in book_rows:
+            genre_total[b["genre"]] = genre_total.get(b["genre"], 0) + rent_count.get(b["book_id"], 0)
+        top_genre = max(genre_total.items(), key=lambda kv: kv[1]) if genre_total else (None, 0)
+        lines.append(f"  จำนวนชื่อเรื่องทั้งหมด (ใช้งาน) : {len(book_rows)}")
+        lines.append(f"  จำนวนครั้งที่ถูกเช่ารวม          : {sum(rent_count.values())}")
+        if most_id is not None and most_n > 0:
+            lines.append(f"  หนังสือที่ถูกเช่ามากที่สุด        : {title_of.get(most_id, '?')} ({most_n} ครั้ง)")
+        else:
+            lines.append("  หนังสือที่ถูกเช่ามากที่สุด        : (ยังไม่มีการเช่า)")
+        if top_genre[0] is not None and top_genre[1] > 0:
+            lines.append(f"  ประเภทที่ถูกเช่ามากที่สุด        : {top_genre[0]} ({top_genre[1]} ครั้ง)")
+    else:
+        lines.append("  (ไม่มีข้อมูลสำหรับสรุป)")
+
+    lines += [""] + _footer()
+
+    with open(REPORT_BOOKS_FILE, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    return REPORT_BOOKS_FILE
 
 
-def _members_section():
-    items = members.list_all(active_only=True)
-    lines = [
-        "[2] สรุปสมาชิก",
+
+# รายงาน 2: สมาชิก (members.dat + rentals.dat)
+
+def generate_members_report():
+    member_rows = members.list_all(active_only=True)
+    all_rentals = [r for r in rentals.list_all() if r["status"] != STATUS_DELETED]
+
+    total_rentals = {}
+    borrowing_now = {}
+    fine_paid = {}
+    for r in all_rentals:
+        total_rentals[r["member_id"]] = total_rentals.get(r["member_id"], 0) + 1
+        if r["status"] == STATUS_BORROWING:
+            borrowing_now[r["member_id"]] = borrowing_now.get(r["member_id"], 0) + 1
+        if r["status"] == STATUS_RETURNED:
+            fine_paid[r["member_id"]] = fine_paid.get(r["member_id"], 0.0) + r["fine_amount"]
+
+    lines = _header("รายงานสมาชิกและสถิติการเช่า")
+    lines += [
+        "รายละเอียด: ตารางด้านล่างแสดงสมาชิกที่ยังใช้งานทุกคน (จาก members.dat)",
+        "ผนวกจำนวนครั้งที่เช่า / รายการที่ยังไม่คืน / ค่าปรับสะสม (นับจาก rentals.dat)",
+        "คอลัมน์: ID | ชื่อ | เบอร์โทร | วันที่สมัคร | จำนวนครั้งที่เช่า | ยังไม่คืน | ค่าปรับสะสม",
         SUB,
-        f"จำนวนสมาชิก (ใช้งาน): {len(items)}",
-        "",
-        "รายชื่อสมาชิก (ID | ชื่อ | เบอร์โทร | วันที่สมัคร):",
     ]
-    if items:
-        for m in items:
+
+    if member_rows:
+        for m in member_rows:
             lines.append(
                 f"  {m['member_id']} | {m['name']} | {m['phone']} | "
-                f"{storage.ts_to_str(m['join_date'])}"
+                f"{storage.ts_to_str(m['join_date'])} | "
+                f"{total_rentals.get(m['member_id'], 0)} | "
+                f"{borrowing_now.get(m['member_id'], 0)} | "
+                f"{fine_paid.get(m['member_id'], 0.0):.2f}"
             )
     else:
         lines.append("  (ไม่มีข้อมูล)")
-    return lines
+
+    lines.append("")
+    lines.append("สรุปท้ายรายงาน")
+    lines.append(SUB)
+    if member_rows:
+        name_of = {m["member_id"]: m["name"] for m in member_rows}
+        most_id, most_n = max(total_rentals.items(), key=lambda kv: kv[1]) if total_rentals else (None, 0)
+        lines.append(f"  จำนวนสมาชิกทั้งหมด (ใช้งาน)     : {len(member_rows)}")
+        lines.append(f"  ยอดค่าปรับสะสมรวมทุกคน          : {sum(fine_paid.values()):.2f} บาท")
+        lines.append(f"  จำนวนรายการที่ยังไม่คืนทั้งหมด    : {sum(borrowing_now.values())}")
+        if most_id is not None and most_n > 0:
+            lines.append(f"  สมาชิกที่เช่าบ่อยที่สุด           : {name_of.get(most_id, '?')} ({most_n} ครั้ง)")
+        else:
+            lines.append("  สมาชิกที่เช่าบ่อยที่สุด           : (ยังไม่มีการเช่า)")
+    else:
+        lines.append("  (ไม่มีข้อมูลสำหรับสรุป)")
+
+    lines += [""] + _footer()
+
+    with open(REPORT_MEMBERS_FILE, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    return REPORT_MEMBERS_FILE
 
 
-def _rentals_section():
-    # คำนวณจาก list_all() เอง ไม่พึ่ง key ของ rentals.stats()
-    # และกรอง record ที่ถูกลบออกอีกชั้นเพื่อความปลอดภัย
+
+# รายงาน 3: การเช่าโดยรวม (books.dat + members.dat + rentals.dat)
+
+def generate_rentals_report():
     items = [r for r in rentals.list_all() if r["status"] != STATUS_DELETED]
     now = storage.now_ts()
 
@@ -87,17 +164,14 @@ def _rentals_section():
     book_title = {b["book_id"]: b["title"] for b in books.list_all(active_only=False)}
     member_name = {m["member_id"]: m["name"] for m in members.list_all(active_only=False)}
 
-    lines = [
-        "[3] สรุปการเช่า",
+    lines = _header("รายงานการเช่า-คืนโดยรวม")
+    lines += [
+        "รายละเอียด: ตารางด้านล่างแสดงรายการเช่าทั้งหมด (จาก rentals.dat)",
+        "พร้อมชื่อหนังสือ (จาก books.dat) และชื่อสมาชิก (จาก members.dat) ของแต่ละรายการ",
+        "คอลัมน์: ID | หนังสือ | สมาชิก | วันเช่า | กำหนดคืน | วันคืน | ค่าปรับ | สถานะ",
         SUB,
-        f"จำนวนรายการเช่าทั้งหมด : {len(items)}",
-        f"ยังไม่คืน              : {len(borrowing)}",
-        f"  - เกินกำหนดแล้ว      : {len(overdue)}",
-        f"คืนแล้ว                : {len(returned)}",
-        f"ค่าปรับรวม (ที่คืนแล้ว) : {total_fine:.2f} บาท",
-        "",
-        "รายการเช่า (ID | หนังสือ | สมาชิก | วันเช่า | กำหนดคืน | วันคืน | ค่าปรับ | สถานะ):",
     ]
+
     if items:
         for r in items:
             if r["status"] == STATUS_RETURNED:
@@ -116,24 +190,26 @@ def _rentals_section():
             )
     else:
         lines.append("  (ไม่มีข้อมูล)")
-    return lines
+
+    lines.append("")
+    lines.append("สรุปท้ายรายงาน")
+    lines.append(SUB)
+    lines.append(f"  จำนวนรายการเช่าทั้งหมด : {len(items)}")
+    lines.append(f"  ยังไม่คืน              : {len(borrowing)}")
+    lines.append(f"    - เกินกำหนดแล้ว      : {len(overdue)}")
+    lines.append(f"  คืนแล้ว                : {len(returned)}")
+    lines.append(f"  ค่าปรับรวม (ที่คืนแล้ว) : {total_fine:.2f} บาท")
+
+    lines += [""] + _footer()
+
+    with open(REPORT_RENTALS_FILE, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    return REPORT_RENTALS_FILE
 
 
 def generate():
-    """สร้าง report.txt แล้วคืน path ของไฟล์"""
-    lines = [
-        LINE,
-        f"{APP_NAME} v{APP_VERSION}",
-        "รายงานสรุป",
-        f"สร้างเมื่อ: {storage.ts_to_str(storage.now_ts())}",
-        LINE,
-        "",
+    return [
+        generate_books_report(),
+        generate_members_report(),
+        generate_rentals_report(),
     ]
-    lines += _books_section() + [""]
-    lines += _members_section() + [""]
-    lines += _rentals_section() + [""]
-    lines += [LINE, "จบรายงาน", LINE]
-
-    with open(REPORT_FILE, "w", encoding="utf-8") as f:
-        f.write("\n".join(lines) + "\n")
-    return REPORT_FILE

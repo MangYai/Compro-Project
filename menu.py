@@ -1,209 +1,394 @@
 """
 เมนู CLI สำหรับผู้ใช้งาน (Add/Update/Delete/View/Report/Exit)
 """
-
-import config
 import books
 import members
 import rentals
 import report
+import storage
+
+# ค่า status ของ rentals (ปรับให้ตรงกับ config.py ของทีมถ้าต่างกัน)
+
+RENT_STATUS_ACTIVE = 1      # กำลังเช่า
+RENT_STATUS_RETURNED = 2    # คืนแล้ว
+
+LINE = "=" * 64
 
 
-def input_int(prompt):
+# Helper: รับค่า / แสดงผล
+
+def _input_str(prompt, allow_empty=False):
     while True:
-        val = input(prompt).strip()
-        if val.isdigit():
-            return int(val)
-        print("กรุณากรอกตัวเลขเท่านั้น")
+        value = input(prompt).strip()
+        if value or allow_empty:
+            return value
+        print("  ! ห้ามเว้นว่าง กรุณากรอกใหม่")
 
 
-def input_nonempty(prompt):
+def _input_int(prompt, min_value=None, allow_empty=False):
+    
     while True:
-        val = input(prompt).strip()
-        if val:
-            return val
-        print("ห้ามเว้นว่าง")
-
-
-# ---------------- ADD ----------------
-
-def add_book():
-    print("\n-- เพิ่มหนังสือ/การ์ตูน --")
-    title = input_nonempty("ชื่อเรื่อง: ")
-    author = input_nonempty("ผู้แต่ง: ")
-    print(f"หมวดหมู่ที่เลือกได้: {', '.join(config.GENRE_PRICE.keys())}")
-    genre = input_nonempty("หมวดหมู่: ")
-    stock = input_int("จำนวนเล่มทั้งหมด: ")
-    try:
-        book_id = books.add(title, author, genre, stock)
-        print(f"เพิ่มสำเร็จ! book_id = {book_id}")
-    except ValueError as e:
-        print(f"เกิดข้อผิดพลาด: {e}")
-
-
-def add_member():
-    print("\n-- เพิ่มสมาชิก --")
-    name = input_nonempty("ชื่อ-นามสกุล: ")
-    phone = input_nonempty("เบอร์โทร: ")
-    member_id = members.add(name, phone)
-    print(f"เพิ่มสำเร็จ! member_id = {member_id}")
-
-
-def add_rental():
-    print("\n-- เพิ่มรายการเช่า --")
-    book_id = input_int("book_id: ")
-    member_id = input_int("member_id: ")
-    try:
-        rent_id = rentals.add(book_id, member_id)
-        print(f"เช่าสำเร็จ! rent_id = {rent_id}")
-    except ValueError as e:
-        print(f"เกิดข้อผิดพลาด: {e}")
-
-
-def menu_add():
-    print("\n1) เพิ่มหนังสือ  2) เพิ่มสมาชิก  3) เพิ่มรายการเช่า")
-    choice = input("เลือก: ").strip()
-    if choice == "1":
-        add_book()
-    elif choice == "2":
-        add_member()
-    elif choice == "3":
-        add_rental()
-    else:
-        print("ตัวเลือกไม่ถูกต้อง")
-
-
-# ---------------- UPDATE ----------------
-
-def menu_update():
-    print("\n1) แก้ไขหนังสือ  2) แก้ไขสมาชิก  3) คืนหนังสือ (return)")
-    choice = input("เลือก: ").strip()
-    if choice == "1":
-        book_id = input_int("book_id ที่จะแก้ไข: ")
-        if books.get(book_id) is None:
-            print("ไม่พบ book_id นี้")
-            return
-        print("(เว้นว่างถ้าไม่ต้องการแก้ไขฟิลด์นั้น)")
-        title = input("ชื่อเรื่องใหม่: ").strip() or None
-        author = input("ผู้แต่งใหม่: ").strip() or None
-        stock_str = input("จำนวนเล่มทั้งหมดใหม่: ").strip()
-        stock = int(stock_str) if stock_str.isdigit() else None
-        ok = books.update(book_id, title=title, author=author, stock_total=stock)
-        print("แก้ไขสำเร็จ" if ok else "แก้ไขไม่สำเร็จ (อาจถูกลบไปแล้ว)")
-    elif choice == "2":
-        member_id = input_int("member_id ที่จะแก้ไข: ")
-        if members.get(member_id) is None:
-            print("ไม่พบ member_id นี้")
-            return
-        name = input("ชื่อใหม่ (เว้นว่างถ้าไม่แก้): ").strip() or None
-        phone = input("เบอร์ใหม่ (เว้นว่างถ้าไม่แก้): ").strip() or None
-        ok = members.update(member_id, name=name, phone=phone)
-        print("แก้ไขสำเร็จ" if ok else "แก้ไขไม่สำเร็จ (อาจถูกลบไปแล้ว)")
-    elif choice == "3":
-        rent_id = input_int("rent_id ที่จะคืน: ")
+        raw = input(prompt).strip()
+        if raw == "" and allow_empty:
+            return None
         try:
-            fine = rentals.return_book(rent_id)
-            if fine > 0:
-                print(f"คืนสำเร็จ! คืนช้า มีค่าปรับ {fine:.2f} บาท")
-            else:
-                print("คืนสำเร็จ! ไม่มีค่าปรับ")
-        except ValueError as e:
-            print(f"เกิดข้อผิดพลาด: {e}")
+            value = int(raw)
+        except ValueError:
+            print("  ! กรุณากรอกเป็นตัวเลขจำนวนเต็ม")
+            continue
+        if min_value is not None and value < min_value:
+            print(f"  ! ต้องมีค่าอย่างน้อย {min_value}")
+            continue
+        return value
+
+
+def _confirm(prompt):
+    return input(f"{prompt} (y/n): ").strip().lower() == "y"
+
+
+def _pause():
+    input("\nกด Enter เพื่อกลับเมนู...")
+
+
+def _fmt_ts(ts):
+    
+    if not ts:
+        return "-"
+    return storage.ts_to_str(ts)
+
+
+def _print_header(title):
+    print(f"\n{LINE}\n  {title}\n{LINE}")
+
+
+def _print_stats(data):
+    if not data:
+        print("  (ไม่มีข้อมูล)")
+        return
+    for key, value in data.items():
+        print(f"  {key}: {value}")
+
+
+# เมนูจัดการหนังสือ
+
+def _print_books(rows):
+    if not rows:
+        print("  (ไม่พบข้อมูลหนังสือ)")
+        return
+    print(f"  {'ID':<5}{'ชื่อเรื่อง':<28}{'ผู้แต่ง':<18}{'ประเภท':<12}{'คงเหลือ/ทั้งหมด'}")
+    print("  " + "-" * 70)
+    for b in rows:
+        print(f"  {b['book_id']:<5}{b['title']:<28}{b['author']:<18}"
+              f"{b['genre']:<12}{b['stock_available']}/{b['stock_total']}")
+
+
+def _book_add():
+    _print_header("เพิ่มหนังสือ")
+    title = _input_str("ชื่อเรื่อง: ")
+    author = _input_str("ผู้แต่ง: ")
+    genre = _input_str("ประเภท: ")
+    stock_total = _input_int("จำนวนเล่มทั้งหมด: ", min_value=1)
+    book_id = books.add(title, author, genre, stock_total)
+    print(f"\n  ✓ เพิ่มหนังสือสำเร็จ (book_id = {book_id})")
+
+
+def _book_list():
+    _print_header("รายการหนังสือทั้งหมด")
+    _print_books(books.list_all(active_only=True))
+
+
+def _book_filter():
+    _print_header("ค้นหา/กรองหนังสือ")
+    genre = _input_str("ประเภท (เว้นว่าง = ทุกประเภท): ", allow_empty=True) or None
+    available_only = _confirm("แสดงเฉพาะเล่มที่ยังว่างให้เช่า?")
+    rows = books.filter_books(genre=genre, available_only=available_only)
+    print()
+    _print_books(rows)
+
+
+def _book_update():
+    _print_header("แก้ไขข้อมูลหนังสือ")
+    book_id = _input_int("book_id ที่ต้องการแก้ไข: ", min_value=1)
+    current = books.get(book_id)
+    if current is None:
+        print("  ! ไม่พบหนังสือนี้")
+        return
+    _print_books([current])
+    print("\n  (กด Enter เพื่อคงค่าเดิม)")
+    title = _input_str("ชื่อเรื่องใหม่: ", allow_empty=True) or None
+    author = _input_str("ผู้แต่งใหม่: ", allow_empty=True) or None
+    genre = _input_str("ประเภทใหม่: ", allow_empty=True) or None
+    stock_total = _input_int("จำนวนเล่มทั้งหมดใหม่: ", min_value=1, allow_empty=True)
+    ok = books.update(book_id, title=title, author=author,
+                      genre=genre, stock_total=stock_total)
+    print("  ✓ แก้ไขสำเร็จ" if ok else "  ! แก้ไขไม่สำเร็จ")
+
+
+def _book_delete():
+    _print_header("ลบหนังสือ")
+    book_id = _input_int("book_id ที่ต้องการลบ: ", min_value=1)
+    current = books.get(book_id)
+    if current is None:
+        print("  ! ไม่พบหนังสือนี้")
+        return
+    _print_books([current])
+    if _confirm("ยืนยันการลบ?"):
+        print("  ✓ ลบสำเร็จ" if books.delete(book_id) else "  ! ลบไม่สำเร็จ")
     else:
-        print("ตัวเลือกไม่ถูกต้อง")
+        print("  ยกเลิกการลบ")
 
 
-# ---------------- DELETE ----------------
+def _book_stats():
+    _print_header("สถิติหนังสือ")
+    _print_stats(books.stats())
 
-def menu_delete():
-    print("\n1) ลบหนังสือ  2) ลบสมาชิก  3) ลบรายการเช่า")
-    choice = input("เลือก: ").strip()
-    if choice == "1":
-        book_id = input_int("book_id ที่จะลบ: ")
-        ok = books.delete(book_id)
-        print("ลบสำเร็จ (soft-delete)" if ok else "ไม่พบข้อมูล")
-    elif choice == "2":
-        member_id = input_int("member_id ที่จะลบ: ")
-        ok = members.delete(member_id)
-        print("ลบสำเร็จ (soft-delete)" if ok else "ไม่พบข้อมูล")
-    elif choice == "3":
-        rent_id = input_int("rent_id ที่จะลบ: ")
-        ok = rentals.delete(rent_id)
-        print("ลบสำเร็จ (soft-delete)" if ok else "ไม่พบข้อมูล")
+
+def _books_menu():
+    actions = {
+        "1": _book_add,
+        "2": _book_list,
+        "3": _book_filter,
+        "4": _book_update,
+        "5": _book_delete,
+        "6": _book_stats,
+    }
+    _run_submenu("จัดการหนังสือ", [
+        "1. เพิ่มหนังสือ",
+        "2. แสดงหนังสือทั้งหมด",
+        "3. ค้นหา/กรองหนังสือ",
+        "4. แก้ไขข้อมูลหนังสือ",
+        "5. ลบหนังสือ",
+        "6. สถิติหนังสือ",
+        "0. กลับเมนูหลัก",
+    ], actions)
+
+
+# เมนูจัดการสมาชิก
+
+def _print_members(rows):
+    if not rows:
+        print("  (ไม่พบข้อมูลสมาชิก)")
+        return
+    print(f"  {'ID':<5}{'ชื่อ':<26}{'เบอร์โทร':<16}{'วันที่สมัคร'}")
+    print("  " + "-" * 64)
+    for m in rows:
+        print(f"  {m['member_id']:<5}{m['name']:<26}{m['phone']:<16}"
+              f"{_fmt_ts(m['join_date'])}")
+
+
+def _member_add():
+    _print_header("เพิ่มสมาชิก")
+    name = _input_str("ชื่อ-นามสกุล: ")
+    phone = _input_str("เบอร์โทร: ")
+    member_id = members.add(name, phone)
+    print(f"\n  ✓ เพิ่มสมาชิกสำเร็จ (member_id = {member_id})")
+
+
+def _member_list():
+    _print_header("รายชื่อสมาชิกทั้งหมด")
+    _print_members(members.list_all(active_only=True))
+
+
+def _member_update():
+    _print_header("แก้ไขข้อมูลสมาชิก")
+    member_id = _input_int("member_id ที่ต้องการแก้ไข: ", min_value=1)
+    current = members.get(member_id)
+    if current is None:
+        print("  ! ไม่พบสมาชิกนี้")
+        return
+    _print_members([current])
+    print("\n  (กด Enter เพื่อคงค่าเดิม)")
+    name = _input_str("ชื่อใหม่: ", allow_empty=True) or None
+    phone = _input_str("เบอร์โทรใหม่: ", allow_empty=True) or None
+    ok = members.update(member_id, name=name, phone=phone)
+    print("  ✓ แก้ไขสำเร็จ" if ok else "  ! แก้ไขไม่สำเร็จ")
+
+
+def _member_delete():
+    _print_header("ลบสมาชิก")
+    member_id = _input_int("member_id ที่ต้องการลบ: ", min_value=1)
+    current = members.get(member_id)
+    if current is None:
+        print("  ! ไม่พบสมาชิกนี้")
+        return
+    _print_members([current])
+    if _confirm("ยืนยันการลบ?"):
+        print("  ✓ ลบสำเร็จ" if members.delete(member_id) else "  ! ลบไม่สำเร็จ")
     else:
-        print("ตัวเลือกไม่ถูกต้อง")
+        print("  ยกเลิกการลบ")
 
 
-# ---------------- VIEW ----------------
+def _members_menu():
+    actions = {
+        "1": _member_add,
+        "2": _member_list,
+        "3": _member_update,
+        "4": _member_delete,
+    }
+    _run_submenu("จัดการสมาชิก", [
+        "1. เพิ่มสมาชิก",
+        "2. แสดงสมาชิกทั้งหมด",
+        "3. แก้ไขข้อมูลสมาชิก",
+        "4. ลบสมาชิก",
+        "0. กลับเมนูหลัก",
+    ], actions)
 
-def print_book_row(b):
-    status_str = "Active" if b["status"] == config.STATUS_ACTIVE else "Deleted"
-    print(f"[{b['book_id']}] {b['title']} - {b['author']} ({b['genre']}) "
-          f"ราคา {b['price_per_day']:.2f}/วัน คงเหลือ {b['stock_available']}/{b['stock_total']} [{status_str}]")
+
+# เมนูการเช่า/คืน
+
+def _print_rentals(rows):
+    if not rows:
+        print("  (ไม่พบข้อมูลการเช่า)")
+        return
+    print(f"  {'ID':<5}{'หนังสือ':<9}{'สมาชิก':<9}{'วันที่เช่า':<18}"
+          f"{'กำหนดคืน':<18}{'วันที่คืน':<18}{'ค่าปรับ':<9}{'สถานะ'}")
+    print("  " + "-" * 100)
+    for r in rows:
+        if r['status'] == RENT_STATUS_ACTIVE:
+            status_text = "กำลังเช่า"
+        elif r['status'] == RENT_STATUS_RETURNED:
+            status_text = "คืนแล้ว"
+        else:
+            status_text = str(r['status'])
+        print(f"  {r['rent_id']:<5}{r['book_id']:<9}{r['member_id']:<9}"
+              f"{_fmt_ts(r['rent_date']):<18}{_fmt_ts(r['due_date']):<18}"
+              f"{_fmt_ts(r['return_date']):<18}{r['fine_amount']:<9.2f}{status_text}")
 
 
-def menu_view():
-    print("\n1) ดูรายการเดียว  2) ดูทั้งหมด  3) ดูแบบกรอง  4) สถิติโดยสรุป")
-    choice = input("เลือก: ").strip()
-    if choice == "1":
-        book_id = input_int("book_id: ")
-        b = books.get(book_id)
-        print_book_row(b) if b else print("ไม่พบข้อมูล")
-    elif choice == "2":
-        book_list = books.list_all(active_only=False)
-        if not book_list:
-            print("ยังไม่มีข้อมูลหนังสือ")
-        for b in book_list:
-            print_book_row(b)
-    elif choice == "3":
-        genre = input("กรองตามหมวดหมู่ (เว้นว่าง = ไม่กรอง): ").strip() or None
-        avail = input("เฉพาะที่ว่างให้เช่าเท่านั้น? (y/n): ").strip().lower() == "y"
-        result = books.filter_books(genre=genre, available_only=avail)
-        if not result:
-            print("ไม่พบข้อมูลตามเงื่อนไข")
-        for b in result:
-            print_book_row(b)
-    elif choice == "4":
-        s = books.stats()
-        r = rentals.stats()
-        print(f"หนังสือทั้งหมด: {s['total_titles']} (Active {s['active_titles']}, Deleted {s['deleted_titles']})")
-        print(f"จำนวนเล่มทั้งหมด: {s['total_copies']} | กำลังถูกยืม: {s['currently_borrowed']} | ว่าง: {s['available_now']}")
-        print(f"ราคา/วัน Min={s['price_min']:.2f} Max={s['price_max']:.2f} Avg={s['price_avg']:.2f}")
-        print(f"รายการเช่าที่ยังไม่คืน: {r['total_active_rentals']} | ค้างเกินกำหนด: {r['overdue_rentals']}")
-        print(f"ค่าปรับที่เก็บได้สะสม: {r['total_fine_collected']:.2f} บาท")
+def _rental_add():
+    _print_header("ทำรายการเช่าหนังสือ")
+    book_id = _input_int("book_id: ", min_value=1)
+    member_id = _input_int("member_id: ", min_value=1)
+    rent_days = _input_int("จำนวนวันที่เช่า (Enter = 7 วัน): ",
+                           min_value=1, allow_empty=True) or 7
+    try:
+        rent_id = rentals.add(book_id, member_id, rent_days)
+    except ValueError as e:
+        print(f"\n  ! เช่าไม่สำเร็จ: {e}")
+        return
+    print(f"\n  ✓ เช่าสำเร็จ (rent_id = {rent_id}, {rent_days} วัน)")
+
+
+def _rental_return():
+    _print_header("คืนหนังสือ")
+    rent_id = _input_int("rent_id: ", min_value=1)
+    try:
+        fine = rentals.return_book(rent_id)
+    except ValueError as e:
+        print(f"\n  ! คืนไม่สำเร็จ: {e}")
+        return
+    print("\n  ✓ คืนหนังสือสำเร็จ")
+    if fine > 0:
+        print(f"  ค่าปรับที่ต้องชำระ: {fine:.2f} บาท")
     else:
-        print("ตัวเลือกไม่ถูกต้อง")
+        print("  ไม่มีค่าปรับ")
 
 
-# ---------------- MAIN LOOP ----------------
+def _rental_list():
+    _print_header("รายการเช่า")
+    print("  1. ทั้งหมด")
+    print("  2. กำลังเช่า")
+    print("  3. คืนแล้ว")
+    choice = input("เลือก (Enter = ทั้งหมด): ").strip()
+    status = {"2": RENT_STATUS_ACTIVE, "3": RENT_STATUS_RETURNED}.get(choice)
+    print()
+    _print_rentals(rentals.list_all(status=status))
+
+
+def _rental_delete():
+    _print_header("ลบรายการเช่า")
+    rent_id = _input_int("rent_id ที่ต้องการลบ: ", min_value=1)
+    if _confirm("ยืนยันการลบ?"):
+        print("  ✓ ลบสำเร็จ" if rentals.delete(rent_id) else "  ! ไม่พบรายการนี้ / ลบไม่สำเร็จ")
+    else:
+        print("  ยกเลิกการลบ")
+
+
+def _rental_stats():
+    _print_header("สถิติการเช่า")
+    _print_stats(rentals.stats())
+
+
+def _rentals_menu():
+    actions = {
+        "1": _rental_add,
+        "2": _rental_return,
+        "3": _rental_list,
+        "4": _rental_delete,
+        "5": _rental_stats,
+    }
+    _run_submenu("เช่า/คืนหนังสือ", [
+        "1. เช่าหนังสือ",
+        "2. คืนหนังสือ",
+        "3. แสดงรายการเช่า",
+        "4. ลบรายการเช่า",
+        "5. สถิติการเช่า",
+        "0. กลับเมนูหลัก",
+    ], actions)
+
+
+# รายงาน
+
+def _report():
+    _print_header("สร้างรายงาน")
+    paths = report.generate()
+    print("  ✓ สร้างรายงานสำเร็จ 3 ไฟล์:")
+    for p in paths:
+        print(f"    - {p}")
+
+
+# ตัวช่วยรันเมนูย่อย + เมนูหลัก
+
+def _run_submenu(title, option_lines, actions):
+    while True:
+        _print_header(title)
+        for line in option_lines:
+            print("  " + line)
+        choice = input("\nเลือกเมนู: ").strip()
+        if choice == "0":
+            return
+        action = actions.get(choice)
+        if action is None:
+            print("  ! ไม่มีเมนูนี้ กรุณาเลือกใหม่")
+            continue
+        try:
+            action()
+        except Exception as e:  # กันโปรแกรมล่มจากบั๊กในโมดูลอื่น
+            print(f"\n  ! เกิดข้อผิดพลาด: {e}")
+        _pause()
+
 
 def main_menu():
+    actions = {
+        "1": _books_menu,
+        "2": _members_menu,
+        "3": _rentals_menu,
+        "4": lambda: (_report(), _pause()),
+    }
     while True:
-        print("\n" + "=" * 40)
-        print(f"       {config.APP_NAME}")
-        print("=" * 40)
-        print("1) Add (เพิ่ม)")
-        print("2) Update (แก้ไข)")
-        print("3) Delete (ลบ)")
-        print("4) View (ดู)")
-        print("5) Generate Report (.txt)")
-        print("0) Exit (ออก)")
-        choice = input("เลือกเมนู: ").strip()
+        print(f"\n{LINE}")
+        print("        M&N Rental Shop - ระบบร้านเช่าหนังสือ")
+        print(LINE)
+        print("  1. จัดการหนังสือ")
+        print("  2. จัดการสมาชิก")
+        print("  3. เช่า/คืนหนังสือ")
+        print("  4. สร้างรายงาน (3 ไฟล์: report_books / report_members / report_rentals)")
+        print("  0. ออกจากโปรแกรม")
+        choice = input("\nเลือกเมนู: ").strip()
 
-        if choice == "1":
-            menu_add()
-        elif choice == "2":
-            menu_update()
-        elif choice == "3":
-            menu_delete()
-        elif choice == "4":
-            menu_view()
-        elif choice == "5":
-            path = report.generate()
-            print(f"สร้างรายงานเรียบร้อย: {path}")
-        elif choice == "0":
-            report.generate()
-            print("บันทึกรายงานอัตโนมัติก่อนออกโปรแกรม... ลาก่อน!")
-            break
-        else:
-            print("ตัวเลือกไม่ถูกต้อง กรุณาเลือกใหม่")
+        if choice == "0":
+            print("\nขอบคุณที่ใช้บริการ M&N Rental Shop")
+            return
+        action = actions.get(choice)
+        if action is None:
+            print("  ! ไม่มีเมนูนี้ กรุณาเลือกใหม่")
+            continue
+        try:
+            action()
+        except Exception as e:
+            print(f"\n  ! เกิดข้อผิดพลาด: {e}")
+            _pause()
+
+
+if __name__ == "__main__":
+    main_menu()
