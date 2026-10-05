@@ -7,7 +7,8 @@ import rentals
 import report
 import storage
 
-# ค่า status ของ rentals (ปรับให้ตรงกับ config.py ของทีมถ้าต่างกัน)
+
+# ค่า status ของ rentals
 
 RENT_STATUS_ACTIVE = 1      # กำลังเช่า
 RENT_STATUS_RETURNED = 2    # คืนแล้ว
@@ -26,7 +27,6 @@ def _input_str(prompt, allow_empty=False):
 
 
 def _input_int(prompt, min_value=None, allow_empty=False):
-    
     while True:
         raw = input(prompt).strip()
         if raw == "" and allow_empty:
@@ -51,7 +51,6 @@ def _pause():
 
 
 def _fmt_ts(ts):
-    
     if not ts:
         return "-"
     return storage.ts_to_str(ts)
@@ -69,8 +68,8 @@ def _print_stats(data):
         print(f"  {key}: {value}")
 
 
-# เมนูจัดการหนังสือ
 
+# เมนูจัดการหนังสือ
 def _print_books(rows):
     if not rows:
         print("  (ไม่พบข้อมูลหนังสือ)")
@@ -163,8 +162,8 @@ def _books_menu():
     ], actions)
 
 
-# เมนูจัดการสมาชิก
 
+# เมนูจัดการสมาชิก
 def _print_members(rows):
     if not rows:
         print("  (ไม่พบข้อมูลสมาชิก)")
@@ -234,8 +233,9 @@ def _members_menu():
     ], actions)
 
 
+# ---------------------------------------------------------------------------
 # เมนูการเช่า/คืน
-
+# ---------------------------------------------------------------------------
 def _print_rentals(rows):
     if not rows:
         print("  (ไม่พบข้อมูลการเช่า)")
@@ -259,14 +259,36 @@ def _rental_add():
     _print_header("ทำรายการเช่าหนังสือ")
     book_id = _input_int("book_id: ", min_value=1)
     member_id = _input_int("member_id: ", min_value=1)
+    qty = _input_int("จำนวนเล่มที่จะเช่า (Enter = 1 เล่ม): ",
+                     min_value=1, allow_empty=True) or 1
     rent_days = _input_int("จำนวนวันที่เช่า (Enter = 7 วัน): ",
                            min_value=1, allow_empty=True) or 7
+
+    current = books.get(book_id)
+    if current is None:
+        print("\n  ! ไม่พบหนังสือรหัสนี้")
+        return
+    if current["stock_available"] < qty:
+        print(f"\n  ! เล่มว่างไม่พอ (มีว่าง {current['stock_available']} เล่ม "
+              f"แต่ขอเช่า {qty} เล่ม)")
+        return
+
+    rent_ids = []
     try:
-        rent_id = rentals.add(book_id, member_id, rent_days)
+        for _ in range(qty):
+            rent_ids.append(rentals.add(book_id, member_id, rent_days))
     except ValueError as e:
         print(f"\n  ! เช่าไม่สำเร็จ: {e}")
+        if rent_ids:
+            print(f"  (ทำรายการสำเร็จไปแล้ว {len(rent_ids)} เล่มก่อนเกิดปัญหา: "
+                  f"rent_id {', '.join(str(i) for i in rent_ids)})")
         return
-    print(f"\n  ✓ เช่าสำเร็จ (rent_id = {rent_id}, {rent_days} วัน)")
+
+    if qty == 1:
+        print(f"\n  ✓ เช่าสำเร็จ (rent_id = {rent_ids[0]}, {rent_days} วัน)")
+    else:
+        ids_text = ", ".join(str(i) for i in rent_ids)
+        print(f"\n  ✓ เช่าสำเร็จ {qty} เล่ม (rent_id = {ids_text}, {rent_days} วัน)")
 
 
 def _rental_return():
@@ -332,7 +354,7 @@ def _rentals_menu():
 def _report():
     _print_header("สร้างรายงาน")
     paths = report.generate()
-    print("  ✓ สร้างรายงานสำเร็จ :")
+    print("  ✓ สร้างรายงานสำเร็จ 3 ไฟล์:")
     for p in paths:
         print(f"    - {p}")
 
@@ -340,6 +362,7 @@ def _report():
 # ตัวช่วยรันเมนูย่อย + เมนูหลัก
 
 def _run_submenu(title, option_lines, actions):
+    """วนลูปเมนูย่อย จนกว่าผู้ใช้เลือก 0; จับ error ไม่ให้โปรแกรมหลุด"""
     while True:
         _print_header(title)
         for line in option_lines:
@@ -353,7 +376,7 @@ def _run_submenu(title, option_lines, actions):
             continue
         try:
             action()
-        except Exception as e:  
+        except Exception as e:  # กันโปรแกรมล่มจากบั๊กในโมดูลอื่น
             print(f"\n  ! เกิดข้อผิดพลาด: {e}")
         _pause()
 
@@ -372,7 +395,7 @@ def main_menu():
         print("  1. จัดการหนังสือ")
         print("  2. จัดการสมาชิก")
         print("  3. เช่า/คืนหนังสือ")
-        print("  4. สร้างรายงาน ")
+        print("  4. สร้างรายงาน (3 ไฟล์: report_books / report_members / report_rentals)")
         print("  0. ออกจากโปรแกรม")
         choice = input("\nเลือกเมนู: ").strip()
 
