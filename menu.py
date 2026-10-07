@@ -1,23 +1,26 @@
 """
 เมนู CLI สำหรับผู้ใช้งาน (Add/Update/Delete/View/Report/Exit)
 """
+import unicodedata
+
 import books
 import members
 import rentals
 import report
 import storage
 
-
-# ค่า status ของ rentals
-
+# ---------------------------------------------------------------------------
+# ค่า status ของ rentals (ปรับให้ตรงกับ config.py ของทีมถ้าต่างกัน)
+# ---------------------------------------------------------------------------
 RENT_STATUS_ACTIVE = 1      # กำลังเช่า
 RENT_STATUS_RETURNED = 2    # คืนแล้ว
 
 LINE = "=" * 64
 
 
+# ---------------------------------------------------------------------------
 # Helper: รับค่า / แสดงผล
-
+# ---------------------------------------------------------------------------
 def _input_str(prompt, allow_empty=False):
     while True:
         value = input(prompt).strip()
@@ -27,6 +30,7 @@ def _input_str(prompt, allow_empty=False):
 
 
 def _input_int(prompt, min_value=None, allow_empty=False):
+    """รับเลขจำนวนเต็ม; ถ้า allow_empty=True และกด Enter เฉย ๆ คืน None"""
     while True:
         raw = input(prompt).strip()
         if raw == "" and allow_empty:
@@ -51,9 +55,23 @@ def _pause():
 
 
 def _fmt_ts(ts):
+    """แปลง epoch เป็นข้อความ; ถ้าไม่มีค่า (0/None) แสดง '-'"""
     if not ts:
         return "-"
     return storage.ts_to_str(ts)
+
+
+def _vlen(s):
+    """ความกว้างที่แสดงผลจริงของข้อความ (ไม่นับสระ/วรรณยุกต์ลอยของภาษาไทย
+    ซึ่ง len() ปกตินับเป็นตัวอักษรแยก แต่ไม่ได้กินพื้นที่แสดงผลเพิ่ม)"""
+    return sum(1 for ch in str(s) if unicodedata.category(ch) != "Mn")
+
+
+def _pad(value, width):
+    """เติมช่องว่างด้านขวาให้ครบ width คอลัมน์ โดยอิงความกว้างแสดงผลจริง
+    (ใช้แทน f"{x:<N}" ซึ่งนับความยาวผิดสำหรับข้อความไทย ทำให้ตารางเหลื่อม)"""
+    text = str(value)
+    return text + " " * max(0, width - _vlen(text))
 
 
 def _print_header(title):
@@ -68,17 +86,19 @@ def _print_stats(data):
         print(f"  {key}: {value}")
 
 
-
+# ---------------------------------------------------------------------------
 # เมนูจัดการหนังสือ
+# ---------------------------------------------------------------------------
 def _print_books(rows):
     if not rows:
         print("  (ไม่พบข้อมูลหนังสือ)")
         return
-    print(f"  {'ID':<5}{'ชื่อเรื่อง':<28}{'ผู้แต่ง':<18}{'ประเภท':<12}{'คงเหลือ/ทั้งหมด'}")
+    print(f"  {_pad('ID', 5)}{_pad('ชื่อเรื่อง', 28)}{_pad('ผู้แต่ง', 18)}"
+          f"{_pad('ประเภท', 12)}คงเหลือ/ทั้งหมด")
     print("  " + "-" * 70)
     for b in rows:
-        print(f"  {b['book_id']:<5}{b['title']:<28}{b['author']:<18}"
-              f"{b['genre']:<12}{b['stock_available']}/{b['stock_total']}")
+        print(f"  {_pad(b['book_id'], 5)}{_pad(b['title'], 28)}{_pad(b['author'], 18)}"
+              f"{_pad(b['genre'], 12)}{b['stock_available']}/{b['stock_total']}")
 
 
 def _book_add():
@@ -162,16 +182,17 @@ def _books_menu():
     ], actions)
 
 
-
+# ---------------------------------------------------------------------------
 # เมนูจัดการสมาชิก
+# ---------------------------------------------------------------------------
 def _print_members(rows):
     if not rows:
         print("  (ไม่พบข้อมูลสมาชิก)")
         return
-    print(f"  {'ID':<5}{'ชื่อ':<26}{'เบอร์โทร':<16}{'วันที่สมัคร'}")
+    print(f"  {_pad('ID', 5)}{_pad('ชื่อ', 26)}{_pad('เบอร์โทร', 16)}วันที่สมัคร")
     print("  " + "-" * 64)
     for m in rows:
-        print(f"  {m['member_id']:<5}{m['name']:<26}{m['phone']:<16}"
+        print(f"  {_pad(m['member_id'], 5)}{_pad(m['name'], 26)}{_pad(m['phone'], 16)}"
               f"{_fmt_ts(m['join_date'])}")
 
 
@@ -240,8 +261,8 @@ def _print_rentals(rows):
     if not rows:
         print("  (ไม่พบข้อมูลการเช่า)")
         return
-    print(f"  {'ID':<5}{'หนังสือ':<9}{'สมาชิก':<9}{'วันที่เช่า':<18}"
-          f"{'กำหนดคืน':<18}{'วันที่คืน':<18}{'ค่าปรับ':<9}{'สถานะ'}")
+    print(f"  {_pad('ID', 5)}{_pad('หนังสือ', 9)}{_pad('สมาชิก', 9)}{_pad('วันที่เช่า', 18)}"
+          f"{_pad('กำหนดคืน', 18)}{_pad('วันที่คืน', 18)}{_pad('ค่าปรับ', 9)}สถานะ")
     print("  " + "-" * 100)
     for r in rows:
         if r['status'] == RENT_STATUS_ACTIVE:
@@ -250,9 +271,10 @@ def _print_rentals(rows):
             status_text = "คืนแล้ว"
         else:
             status_text = str(r['status'])
-        print(f"  {r['rent_id']:<5}{r['book_id']:<9}{r['member_id']:<9}"
-              f"{_fmt_ts(r['rent_date']):<18}{_fmt_ts(r['due_date']):<18}"
-              f"{_fmt_ts(r['return_date']):<18}{r['fine_amount']:<9.2f}{status_text}")
+        fine_text = f"{r['fine_amount']:.2f}"
+        print(f"  {_pad(r['rent_id'], 5)}{_pad(r['book_id'], 9)}{_pad(r['member_id'], 9)}"
+              f"{_pad(_fmt_ts(r['rent_date']), 18)}{_pad(_fmt_ts(r['due_date']), 18)}"
+              f"{_pad(_fmt_ts(r['return_date']), 18)}{_pad(fine_text, 9)}{status_text}")
 
 
 def _rental_add():
@@ -349,8 +371,9 @@ def _rentals_menu():
     ], actions)
 
 
+# ---------------------------------------------------------------------------
 # รายงาน
-
+# ---------------------------------------------------------------------------
 def _report():
     _print_header("สร้างรายงาน")
     paths = report.generate()
@@ -359,8 +382,9 @@ def _report():
         print(f"    - {p}")
 
 
+# ---------------------------------------------------------------------------
 # ตัวช่วยรันเมนูย่อย + เมนูหลัก
-
+# ---------------------------------------------------------------------------
 def _run_submenu(title, option_lines, actions):
     """วนลูปเมนูย่อย จนกว่าผู้ใช้เลือก 0; จับ error ไม่ให้โปรแกรมหลุด"""
     while True:
@@ -382,6 +406,7 @@ def _run_submenu(title, option_lines, actions):
 
 
 def main_menu():
+    """ลูปหลักของโปรแกรม"""
     actions = {
         "1": _books_menu,
         "2": _members_menu,
@@ -395,7 +420,7 @@ def main_menu():
         print("  1. จัดการหนังสือ")
         print("  2. จัดการสมาชิก")
         print("  3. เช่า/คืนหนังสือ")
-        print("  4. สร้างรายงาน ")
+        print("  4. สร้างรายงาน (3 ไฟล์: report_books / report_members / report_rentals)")
         print("  0. ออกจากโปรแกรม")
         choice = input("\nเลือกเมนู: ").strip()
 

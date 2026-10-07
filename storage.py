@@ -1,5 +1,6 @@
 import os
 import time
+import unicodedata
 from datetime import datetime
 
 
@@ -76,3 +77,18 @@ def next_id(path, record_size, unpack_fn, id_field):
     if not records:
         return 1
     return max(r[id_field] for r in records) + 1
+
+
+def visual_len(text):
+    """ความกว้างที่แสดงผลจริงของข้อความ (ไม่นับสระ/วรรณยุกต์ลอยของภาษาไทย
+    เช่น ่ ้ ั ิ ี ึ ื ซึ่ง len() ปกตินับเป็นตัวอักษรแยก แต่ไม่ได้กินพื้นที่
+    แสดงผลเพิ่ม — ใช้ค่านี้แทน len() เวลาจัดคอลัมน์ตารางที่มีข้อความไทย)"""
+    return sum(1 for ch in str(text) if unicodedata.category(ch) != "Mn")
+
+
+def pad_col(value, width, align="left"):
+    """จัดข้อความให้ครบ width คอลัมน์ โดยอิงความกว้างแสดงผลจริง (visual_len)
+    แทน f"{x:<N}"/f"{x:>N}" ปกติ ซึ่งจะเติมช่องว่างผิดถ้าข้อความมีภาษาไทย"""
+    text = str(value)
+    pad = " " * max(0, width - visual_len(text))
+    return (pad + text) if align == "right" else (text + pad)
