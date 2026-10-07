@@ -92,3 +92,37 @@ def pad_col(value, width, align="left"):
     text = str(value)
     pad = " " * max(0, width - visual_len(text))
     return (pad + text) if align == "right" else (text + pad)
+
+
+def render_table(headers, rows, aligns=None):
+    """สร้างตารางแบบมีกรอบ (box table คั่นด้วย +/-/|) จาก headers (list ชื่อ
+    คอลัมน์) และ rows (list ของ list ค่าในแต่ละแถว) คืนค่าเป็น list ของ
+    บรรทัดข้อความพร้อมเส้นขอบ ความกว้างแต่ละคอลัมน์คำนวณจากความกว้างแสดงผล
+    จริง (visual_len) ของเนื้อหาทั้งหมดในคอลัมน์นั้น (รองรับภาษาไทย) จึงตรง
+    กับเนื้อหาเสมอ ไม่มีทางเบี้ยวแม้ข้อความแต่ละแถวยาวไม่เท่ากัน
+    aligns: list ของ 'left'/'right' ต่อคอลัมน์ (ค่าเริ่มต้น = 'left' ทุกคอลัมน์)
+    """
+    n = len(headers)
+    if aligns is None:
+        aligns = ["left"] * n
+    str_rows = [[str(cell) for cell in row] for row in rows]
+
+    widths = []
+    for i in range(n):
+        w = visual_len(str(headers[i]))
+        for row in str_rows:
+            w = max(w, visual_len(row[i]))
+        widths.append(w)
+
+    def border():
+        return "+" + "+".join("-" * (w + 2) for w in widths) + "+"
+
+    def fmt_row(cells):
+        parts = [f" {pad_col(cells[i], widths[i], aligns[i])} " for i in range(n)]
+        return "|" + "|".join(parts) + "|"
+
+    lines = [border(), fmt_row(list(headers)), border()]
+    for row in str_rows:
+        lines.append(fmt_row(row))
+    lines.append(border())
+    return lines

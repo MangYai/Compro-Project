@@ -43,18 +43,6 @@ def _footer():
     return [LINE, "จบรายงาน", LINE]
 
 
-def _row(cells):
-    """cells = list ของ (ข้อความ, ความกว้าง, แนว) แนว = 'left' หรือ 'right'
-    คอลัมน์สุดท้ายไม่ padding (กันช่องว่างท้ายบรรทัดเปล่า ๆ)"""
-    parts = []
-    for i, (text, width, align) in enumerate(cells):
-        if i == len(cells) - 1:
-            parts.append(str(text))
-        else:
-            parts.append(storage.pad_col(text, width, align) + "  ")
-    return "  " + "".join(parts)
-
-
 # ---------------------------------------------------------------------------
 # รายงาน 1: หนังสือ (books.dat + rentals.dat)
 # ---------------------------------------------------------------------------
@@ -67,32 +55,23 @@ def generate_books_report():
     for r in all_rentals:
         rent_count[r["book_id"]] = rent_count.get(r["book_id"], 0) + 1
 
-    cols = [("ID", 4, "left"), ("ชื่อเรื่อง", 26, "left"), ("ผู้แต่ง", 18, "left"),
-            ("ประเภท", 10, "left"), ("ราคา/วัน", 9, "right"),
-            ("ว่าง/ทั้งหมด", 12, "left"), ("เช่าไปแล้ว", 10, "right")]
-
     lines = _header("รายงานหนังสือและสถิติการเช่า")
     lines += [
-        "รายละเอียด: ตารางด้านล่างแสดงหนังสือที่ยังใช้งานทุกเล่ม (จาก books.dat)",
-        "ผนวกจำนวนครั้งที่เคยถูกเช่าของแต่ละเล่ม (นับจาก rentals.dat)",
+        "รายละเอียด: ตารางด้านล่างแสดงหนังสือที่ยังใช้งานทุกเล่ม",
+        "ผนวกจำนวนครั้งที่เคยถูกเช่าของแต่ละเล่ม",
         "",
-        _row([(name, width, "left") for name, width, _ in cols]),
-        SUB,
     ]
 
     if book_rows:
+        headers = ["ID", "ชื่อเรื่อง", "ผู้แต่ง", "ประเภท", "ราคา/วัน", "ว่าง/ทั้งหมด", "เช่าไปแล้ว"]
+        aligns = ["left", "left", "left", "left", "right", "left", "right"]
+        rows = []
         for b in book_rows:
             times = rent_count.get(b["book_id"], 0)
             stock = f"{b['stock_available']}/{b['stock_total']}"
-            lines.append(_row([
-                (b["book_id"], 4, "left"),
-                (b["title"], 26, "left"),
-                (b["author"], 18, "left"),
-                (b["genre"], 10, "left"),
-                (f"{b['price_per_day']:.2f}", 9, "right"),
-                (stock, 12, "left"),
-                (times, 10, "right"),
-            ]))
+            rows.append([b["book_id"], b["title"], b["author"], b["genre"],
+                         f"{b['price_per_day']:.2f}", stock, times])
+        lines += storage.render_table(headers, rows, aligns)
     else:
         lines.append("  (ไม่มีข้อมูล)")
 
@@ -142,30 +121,25 @@ def generate_members_report():
         if r["status"] == STATUS_RETURNED:
             fine_paid[r["member_id"]] = fine_paid.get(r["member_id"], 0.0) + r["fine_amount"]
 
-    cols = [("ID", 4, "left"), ("ชื่อ", 22, "left"), ("เบอร์โทร", 13, "left"),
-            ("วันที่สมัคร", 12, "left"), ("เช่าไปแล้ว", 10, "right"),
-            ("ยังไม่คืน", 9, "right"), ("ค่าปรับสะสม", 11, "right")]
-
     lines = _header("รายงานสมาชิกและสถิติการเช่า")
     lines += [
-        "รายละเอียด: ตารางด้านล่างแสดงสมาชิกที่ยังใช้งานทุกคน (จาก members.dat)",
-        "ผนวกจำนวนครั้งที่เช่า / รายการที่ยังไม่คืน / ค่าปรับสะสม (นับจาก rentals.dat)",
+        "รายละเอียด: ตารางด้านล่างแสดงสมาชิกที่ยังใช้งานทุกคน",
+        "ผนวกจำนวนครั้งที่เช่า / รายการที่ยังไม่คืน / ค่าปรับสะสม",
         "",
-        _row([(name, width, "left") for name, width, _ in cols]),
-        SUB,
     ]
 
     if member_rows:
+        headers = ["ID", "ชื่อ", "เบอร์โทร", "วันที่สมัคร", "เช่าไปแล้ว", "ยังไม่คืน", "ค่าปรับสะสม"]
+        aligns = ["left", "left", "left", "left", "right", "right", "right"]
+        rows = []
         for m in member_rows:
-            lines.append(_row([
-                (m["member_id"], 4, "left"),
-                (m["name"], 22, "left"),
-                (m["phone"], 13, "left"),
-                (storage.ts_to_str(m["join_date"]), 12, "left"),
-                (total_rentals.get(m["member_id"], 0), 10, "right"),
-                (borrowing_now.get(m["member_id"], 0), 9, "right"),
-                (f"{fine_paid.get(m['member_id'], 0.0):.2f}", 11, "right"),
-            ]))
+            rows.append([
+                m["member_id"], m["name"], m["phone"], storage.ts_to_str(m["join_date"]),
+                total_rentals.get(m["member_id"], 0),
+                borrowing_now.get(m["member_id"], 0),
+                f"{fine_paid.get(m['member_id'], 0.0):.2f}",
+            ])
+        lines += storage.render_table(headers, rows, aligns)
     else:
         lines.append("  (ไม่มีข้อมูล)")
 
@@ -208,20 +182,17 @@ def generate_rentals_report():
     book_title = {b["book_id"]: b["title"] for b in books.list_all(active_only=False)}
     member_name = {m["member_id"]: m["name"] for m in members.list_all(active_only=False)}
 
-    cols = [("ID", 4, "left"), ("หนังสือ", 20, "left"), ("สมาชิก", 16, "left"),
-            ("วันเช่า", 12, "left"), ("กำหนดคืน", 12, "left"), ("วันคืน", 12, "left"),
-            ("ค่าปรับ", 9, "right"), ("สถานะ", 10, "left")]
-
     lines = _header("รายงานการเช่า-คืนโดยรวม")
     lines += [
-        "รายละเอียด: ตารางด้านล่างแสดงรายการเช่าทั้งหมด (จาก rentals.dat)",
-        "พร้อมชื่อหนังสือ (จาก books.dat) และชื่อสมาชิก (จาก members.dat) ของแต่ละรายการ",
+        "รายละเอียด: ตารางด้านล่างแสดงรายการเช่าทั้งหมด",
+        "พร้อมชื่อหนังสือ และชื่อสมาชิก ของแต่ละรายการ",
         "",
-        _row([(name, width, "left") for name, width, _ in cols]),
-        SUB,
     ]
 
     if items:
+        headers = ["ID", "หนังสือ", "สมาชิก", "วันเช่า", "กำหนดคืน", "วันคืน", "ค่าปรับ", "สถานะ"]
+        aligns = ["left", "left", "left", "left", "left", "left", "right", "left"]
+        rows = []
         for r in items:
             if r["status"] == STATUS_RETURNED:
                 state = "คืนแล้ว"
@@ -229,16 +200,13 @@ def generate_rentals_report():
                 state = "เกินกำหนด"
             else:
                 state = "กำลังยืม"
-            lines.append(_row([
-                (r["rent_id"], 4, "left"),
-                (book_title.get(r["book_id"], "?"), 20, "left"),
-                (member_name.get(r["member_id"], "?"), 16, "left"),
-                (storage.ts_to_str(r["rent_date"]), 12, "left"),
-                (storage.ts_to_str(r["due_date"]), 12, "left"),
-                (storage.ts_to_str(r["return_date"]), 12, "left"),
-                (f"{r['fine_amount']:.2f}", 9, "right"),
-                (state, 10, "left"),
-            ]))
+            rows.append([
+                r["rent_id"], book_title.get(r["book_id"], "?"),
+                member_name.get(r["member_id"], "?"),
+                storage.ts_to_str(r["rent_date"]), storage.ts_to_str(r["due_date"]),
+                storage.ts_to_str(r["return_date"]), f"{r['fine_amount']:.2f}", state,
+            ])
+        lines += storage.render_table(headers, rows, aligns)
     else:
         lines.append("  (ไม่มีข้อมูล)")
 
