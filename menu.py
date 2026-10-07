@@ -415,7 +415,7 @@ def main_menu():
     }
     while True:
         print(f"\n{LINE}")
-        print("        M&N Rental Shop - ระบบเช่าหนังสือการ์ตูน")
+        print("        M&N Rental Shop - ระบบ เช่าหนังสือการ์ตูน")
         print(LINE)
         print("  1. จัดการหนังสือ")
         print("  2. จัดการสมาชิก")
