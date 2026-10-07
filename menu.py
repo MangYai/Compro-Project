@@ -415,7 +415,7 @@ def main_menu():
     }
     while True:
         print(f"\n{LINE}")
-        print("        M&N Rental Shop - ระบบร้านเช่าหนังสือ")
+        print("        M&N Rental Shop - ระบบเช่าหนังสือการ์ตูน")
         print(LINE)
         print("  1. จัดการหนังสือ")
         print("  2. จัดการสมาชิก")
@@ -425,7 +425,7 @@ def main_menu():
         choice = input("\nเลือกเมนู: ").strip()
 
         if choice == "0":
-            print("\nขอบคุณที่ใช้บริการ M&N Rental Shop")
+            print("\nThank you for using M&N Rental Shop")
             return
         action = actions.get(choice)
         if action is None:
