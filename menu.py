@@ -420,7 +420,7 @@ def main_menu():
         print("  1. จัดการหนังสือ")
         print("  2. จัดการสมาชิก")
         print("  3. เช่า/คืนหนังสือ")
-        print("  4. สร้างรายงาน (3 ไฟล์: report_books / report_members / report_rentals)")
+        print("  4. สร้างรายงาน")
         print("  0. ออกจากโปรแกรม")
         choice = input("\nเลือกเมนู: ").strip()
 
